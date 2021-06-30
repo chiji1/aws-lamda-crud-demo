@@ -3,6 +3,17 @@ const uuid =  require('uuid');
 const { schemaCreate, schemaUpdate } = require('./model');
 const { success, fail } = require('../utils')
 const fs = require('fs');
+// const Buffer = require('buffer');
+const dotenv = require('dotenv');
+dotenv.config();
+
+const config = {
+    accessKeyId: String(process.env.AWS_ACCESS_KEY_ID).trim(),
+    secretAccessKey: String(process.env.AWS_SECRET_ACCESS_KEY).trim(),
+    region: 'us-east-2'
+}
+AWS.config.update(config);
+const s3Bucket = new AWS.S3( { params: {Bucket: 'chiji-rest-bucket'} } );
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
 
@@ -17,11 +28,19 @@ async function fetchRecords(req, res) {
                 console.log(error);
                 return fail(res, 422, error.message);
             }
+            const response =  {
+                statusCode: 200,
+                body: data.Items
+            }
 
             return success(res, 200, data.Items, 'Ingredient retrieved successfully');
         });
     } catch (e) {
-        return fail(res, 500, `Error creating record. ${e.message}`);
+        res.status(500).json({
+            statusCode: err.statusCode || 500,
+            headers: { 'Content-Type': 'text/plain' },
+            body: 'Could not fetch the user.'
+        });
     }
 }
 
@@ -44,7 +63,11 @@ async function fetchSingleRecord(req, res) {
             return success(res, 200, data.Item, 'Ingredient retrieved successfully');
         });
     } catch (e) {
-        return fail(res, 500, `Error creating record. ${e.message}`);
+        res.status(500).json({
+            statusCode: err.statusCode || 500,
+            headers: { 'Content-Type': 'text/plain' },
+            body: 'Could not fetch the user.'
+        });
     }
 }
 
@@ -55,17 +78,23 @@ async function createRecords(req, res) {
         if (error) {
             return fail(res, 422, `Error validating data. ${error.message}`);
         }
-
-        // to declare some path to store your converted image
-        const file= `images/${Date.now()}.png`;
-        const path = `./public/${file}`;
-        const imgdata = req.body.image;
-
-        // to convert base64 format into random filename
-        const base64Data = imgdata.replace(/^data:([A-Za-z-+/]+);base64,/, '');
-
-        fs.writeFileSync(path, base64Data,  {encoding: 'base64'});
-        data.image = file;
+        const buf = new Buffer(data.image.replace(/^data:image\/\w+;base64,/, ""),'base64');
+        const imageData = {
+            Key: `images/${new Date().getTime()}.jpeg`,
+            Body: buf,
+            ContentEncoding: 'base64',
+            ContentType: 'image/jpeg'
+        };
+        s3Bucket.putObject(imageData, function(err, data){
+            if (err) {
+                console.log(err);
+                console.log('Error uploading data: ', data);
+            } else {
+                console.log('Image response data -> ', data.location);
+                console.log('successfully uploaded the image!');
+            }
+        });
+        // data.image = await uploadFileToS3(path);
 
         const params = {
             TableName: 'ingredients',
@@ -91,6 +120,38 @@ async function createRecords(req, res) {
     }
 }
 
+const uploadFileToS3 = async (
+    filePath,
+    deleteAfterUpload = false,
+) => {
+    try {
+        const awsConfigOptions = {
+            accessKeyId: String(process.env.AWS_ACCESS_KEY_ID).trim(),
+            secretAccessKey: String(process.env.AWS_SECRET_ACCESS_KEY).trim(),
+        };
+        const s3 = new AWS.S3(awsConfigOptions);
+        //Create a readstream for the uploaded files
+        const createdReadStream = fs.createReadStream(filePath);
+
+        //Create AWS Params object
+        const awsBucketParams = {
+            Bucket: String(process.env.AWS_BUCKET_NAME).trim(),
+            Key: `${String(process.env.AWS_KEY_NAME).trim()}/${filePath}`,
+            Body: createdReadStream,
+        };
+
+        //Upload file to AWS storage bucket
+        const result = await s3.upload(awsBucketParams).promise();
+
+        if (result && deleteAfterUpload) {
+            fs.unlinkSync(filePath);
+        }
+        return result.Location;
+    } catch (ex) {
+        throw ex;
+    }
+};
+
 async function updateRecords(req, res) {
     try {
         const { recordId } = req.params;
@@ -105,12 +166,13 @@ async function updateRecords(req, res) {
             Key: {
               id: recordId
             },
-            UpdateExpression: "set title = :t, fat = :f, calories = :c, carbohydrates = :ca, updatedAt = :u",
+            UpdateExpression: "set title = :t, image = :i, fat = :f, calories = :c, carbohydrates = :ca, updatedAt = :u",
             ExpressionAttributeValues: {
                 ':t': data.title,
-                ':f': data.fat ?? null,
-                ':c': data.calories ?? null,
-                ':ca': data.carbohydrates ?? null,
+                ':i': data.image,
+                ':f': data.fat || null,
+                ':c': data.calories || null,
+                ':ca': data.carbohydrates || null,
                 ':u': new Date().toISOString()
             }
         }
@@ -121,7 +183,7 @@ async function updateRecords(req, res) {
                 return fail(res, 422, error.message);
             }
 
-            return success(res, 200, data, 'Ingredient updated successfully');
+            return callback(success(res, 200, data, 'Ingredient updated successfully'));
         });
     } catch (e) {
         return fail(res, 500, `Error creating record. ${e.message}`);

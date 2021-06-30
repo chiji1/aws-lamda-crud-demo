@@ -16,8 +16,6 @@ app.use(express.static('./public'));
 
 app.get("/", (req, res) => {
     res.json({
-        statusCode: 200,
-        body: null,
         success: true,
         payload: [],
         message: "Cassasoft API",
@@ -26,8 +24,6 @@ app.get("/", (req, res) => {
 
 app.get("/api", (req, res) => {
     res.json({
-        statusCode: 200,
-        body: null,
         success: true,
         payload: [],
         message: "Cassasoft API",
@@ -36,16 +32,14 @@ app.get("/api", (req, res) => {
 
 app.use('/api', ingredientRoutes);
 
-app.use((error, req, res, next) => {
-    res.status(500);
-    res.json({
-        statusCode: 500,
-        body: null,
-        success: false,
-        payload: null,
-        message: `CASSASOFT API SAYS: ${error.message} for path: ${req.path}`,
-    });
-    next();
-});
+// app.use((error, req, res, next) => {
+//     res.status(500);
+//     res.json({
+//         statusCode: 500,
+//         headers: { 'Content-Type': 'text/plain' },
+//         body: null
+//     });
+//     next();
+// });
 
 module.exports = app;
