@@ -2,6 +2,7 @@ const AWS = require('aws-sdk');
 const uuid =  require('uuid');
 const { schemaCreate, schemaUpdate } = require('./model');
 const { success, fail } = require('../utils')
+const fs = require('fs');
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
 
@@ -54,6 +55,17 @@ async function createRecords(req, res) {
         if (error) {
             return fail(res, 422, `Error validating data. ${error.message}`);
         }
+
+        // to declare some path to store your converted image
+        const file= `images/${Date.now()}.png`;
+        const path = `./public/${file}`;
+        const imgdata = req.body.image;
+
+        // to convert base64 format into random filename
+        const base64Data = imgdata.replace(/^data:([A-Za-z-+/]+);base64,/, '');
+
+        fs.writeFileSync(path, base64Data,  {encoding: 'base64'});
+        data.image = file;
 
         const params = {
             TableName: 'ingredients',
