@@ -93,12 +93,13 @@ async function updateRecords(req, res) {
             Key: {
               id: recordId
             },
-            Item: {
-                'title': data.title,
-                'fat': data.fat ?? null,
-                'calories': data.calories ?? null,
-                'carbohydrates': data.carbohydrates ?? null,
-                'updatedAt': new Date().toISOString()
+            UpdateExpression: "set title = :t, fat = :f, calories = :c, carbohydrates = :ca, updatedAt = :u",
+            ExpressionAttributeValues: {
+                ':t': data.title,
+                ':f': data.fat ?? null,
+                ':c': data.calories ?? null,
+                ':ca': data.carbohydrates ?? null,
+                ':u': new Date().toISOString()
             }
         }
 
